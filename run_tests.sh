@@ -9,7 +9,9 @@ declare -a test_files=(
 function run_test_file() {
     tlacli check \
         --cfg "${root_dir}/$1.cfg" \
-        "${root_dir}/$1.tla"
+        "${root_dir}/$1.tla" \
+        --show-cfg \
+        --show-script
 }
 
 function run_tests() {

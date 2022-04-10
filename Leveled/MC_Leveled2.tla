@@ -1,5 +1,9 @@
 ---- MODULE MC_Leveled2 ----
 EXTENDS Leveled2
 
-MCUsrMsgs == <<PutMessage("Key", "Value")>>    
+Init2 ==
+    /\ Init
+    /\ usr_msgs = <<PutMessage("Key", "Value")>> 
+
+Spec2 == Init2 /\ [][Next]_vars
 ====

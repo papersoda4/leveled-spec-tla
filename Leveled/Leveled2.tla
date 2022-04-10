@@ -1,7 +1,5 @@
 ---- MODULE Leveled2 ----
 EXTENDS TLC, FiniteSets, Sequences
-CONSTANTS c_usr_msgs
-ASSUME (Len(c_usr_msgs) # 0)
 VARIABLES
     \* sequence of messages sent to the system
     usr_msgs,
@@ -32,8 +30,7 @@ PutMessage(key, value) == Message(User, ProcType_Bok, OpType_Put, PutPayload(key
 NewPutMsgFromMsg(msg, src, dst) == Message(src, dst, OpType_Put, PutPayload(msg.payload.key, msg.payload.value)) 
 Usr_SendPut ==
     /\  usr_msgs # <<>>
-    /\  LET
-            msg == Head(usr_msgs)
+    /\  LET msg == Head(usr_msgs)
         IN
             /\ msg.op = OpType_Put
             
@@ -76,11 +73,9 @@ TypeInv ==
                     /\ msg.dst \in Processes
                     /\ msg.op  \in Operations
 Init ==
-    /\ usr_msgs = c_usr_msgs
     /\ msg_sqs = [p \in Processes |-> <<>>]
     /\ msg_rqs = [p \in Processes |-> {}]
 Next ==
     \/ Usr_SendPut
     \/ Bok_RecvPut
-Spec == Init /\ [][Next]_vars
 ====

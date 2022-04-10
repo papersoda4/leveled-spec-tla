@@ -6,8 +6,23 @@ on:
 jobs:
   run_tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      
+      - name: Install CLI for TLA
+        uses: BSFishy/pip-action@v1
+        with:
+          packages: |
+            tlacli
+      
       - name: Run bash test script
         run: |
           chmod +x ./run_tests.sh

@@ -1,5 +1,3 @@
 #!/bin/bash
 
-var="Hello World"
-
-echo "$var"
+tlacli check ./Leveled/MC_Leveled1.tla

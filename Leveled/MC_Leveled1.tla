@@ -1,5 +1,5 @@
 ---- MODULE MC_Leveled1 ----
-EXTENDS Leveled
+EXTENDS Leveled1
 CONSTANTS
     proc_count
 Init1 == /\ Init

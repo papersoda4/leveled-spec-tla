@@ -1,4 +1,4 @@
----- MODULE Leveled ----
+---- MODULE Leveled1 ----
 EXTENDS TLC, FiniteSets, Sequences
 ProcType_Pen == "Pen"
 ProcType_Ink == "Ink"
@@ -10,5 +10,4 @@ VARIABLES msg_qs
 vars == <<msg_qs>>
 Init == /\ msg_qs = [p \in Processes |-> <<>>]
 Next == /\ UNCHANGED msg_qs
-Spec == Init /\ [][Next]_vars
 ====

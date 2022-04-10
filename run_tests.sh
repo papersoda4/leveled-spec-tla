@@ -1,3 +1,5 @@
 #!/bin/bash
 
-tlacli check ./Leveled/MC_Leveled1.tla
+tlacli check \
+    --cfg ./Leveled/MC_Leveled1.cfg \
+    ./Leveled/MC_Leveled1.tla

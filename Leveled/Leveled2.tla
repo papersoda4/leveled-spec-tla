@@ -6,12 +6,16 @@ VARIABLES
     \* messages that the process has sent
     msg_sqs,
     \* messages that the process has received
-    msg_rqs
-vars == <<msg_sqs, msg_rqs, usr_msgs>>
+    msg_rqs,
+    \* state of the system
+    pc
+vars == <<msg_sqs, msg_rqs, usr_msgs, pc>>
 ProcType_Pen == "Pen"
 ProcType_Ink == "Ink"
 ProcType_Bok == "Bok"
 User == "User"
+PC_Started == "Started"
+PC_Done == "Done"
 Processes == {ProcType_Pen, ProcType_Ink, ProcType_Bok}
 MessageSenders == User \cup Processes
 OpType_Put == "PUT"
@@ -44,7 +48,7 @@ Usr_SendPut ==
                         IF src = User THEN msg_sqs
                         ELSE [msg_sqs EXCEPT ![src] = Append(@, smsg)]
                     /\ usr_msgs' = Tail(usr_msgs)
-    /\ UNCHANGED <<>>
+    /\ UNCHANGED <<pc>>
 Bok_RecvPut ==
     /\  \E msg \in msg_rqs[ProcType_Bok]:
             /\  msg.op = OpType_Put
@@ -58,7 +62,12 @@ Bok_RecvPut ==
                         ![dst] = @ \cup {smsg},
                         ![src] = @ \ {msg}]
                     /\ msg_sqs' = [msg_sqs EXCEPT ![src] = Append(@, smsg)]
+                    /\ pc' = PC_Done
     /\ UNCHANGED <<usr_msgs>>
+
+Terminating ==
+    /\ pc = PC_Done
+    /\ UNCHANGED vars
 RECURSIVE SeqToSetInt(_, _)
 SeqToSetInt(seq, set) ==
     IF seq = <<>> THEN set
@@ -73,9 +82,11 @@ TypeInv ==
                     /\ msg.dst \in Processes
                     /\ msg.op  \in Operations
 Init ==
+    /\ pc = PC_Started
     /\ msg_sqs = [p \in Processes |-> <<>>]
     /\ msg_rqs = [p \in Processes |-> {}]
 Next ==
     \/ Usr_SendPut
     \/ Bok_RecvPut
+    \/ Terminating
 ====

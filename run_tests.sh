@@ -8,6 +8,7 @@ declare -a test_files=(
 
 function run_test_file() {
     tlacli check \
+        -deadlock \
         --cfg "${root_dir}/$1.cfg" \
         "${root_dir}/$1.tla"
 }

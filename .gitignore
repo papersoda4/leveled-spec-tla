@@ -1,3 +1,6 @@
 *.dot
 *.out
+
 states
+
+sandbox.tla

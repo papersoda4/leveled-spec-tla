@@ -2,7 +2,7 @@
 
 root_dir="./Leveled"
 declare -a test_files=(
-    "MC_Leveled1",
+    "MC_Leveled1"
     "MC_Leveled2"
 )
 

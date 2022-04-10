@@ -17,5 +17,5 @@ BokActorDefinedInv == /\ IsActorDefined(ProcType_Bok)
 InkActorDefinedInv == /\ IsActorDefined(ProcType_Ink)
 PenActorDefinedInv == /\ IsActorDefined(ProcType_Pen)
 Next1 == \/ EmptyState
-Spec1 == Init1 /\ [][Next1]_vars
+Spec == Init1 /\ [][Next1]_vars
 ====

@@ -3,15 +3,14 @@ EXTENDS Leveled
 CONSTANTS
     proc_count
 Init1 == /\ Init
-LOCAL CommunicatingProcessCountEquals(expected_proc_count) == 
-    /\  LET actual_proc_count == Cardinality(Processes)
-        IN actual_proc_count = expected_proc_count
+LOCAL CommunicatingProcessCountEquals(expected) == 
+    /\  LET actual == Cardinality(Processes)
+        IN actual = expected
 LOCAL IsOperationAvailable(op) == /\ op \in Operations
 LOCAL IsActorDefined(actor) == /\ actor \in Processes
+LOCAL IsProcQueueEmpty(proc) == msg_qs[proc] = <<>>
 LOCAL EmptyState == /\ UNCHANGED <<msg_qs>>
-AllProccessQueuesInitiallyEmptyInv ==
-    /\  \A proc \in Processes:
-            msg_qs[proc] = <<>>
+AllProccessQueuesInitiallyEmptyInv == /\ \A p \in Processes: IsProcQueueEmpty(p)
 CommunicatingProcCountInv == /\ CommunicatingProcessCountEquals(proc_count)
 PutOperationIsAvailableInv == /\ IsOperationAvailable(OpType_Put)
 BokActorDefinedInv == /\ IsActorDefined(ProcType_Bok)

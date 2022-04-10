@@ -1,0 +1,15 @@
+name: Run tests
+on:
+  push:
+    branches:
+      - master
+jobs:
+  run_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run bash test script
+        run: |
+          chmod +x ./run_tests.sh
+          ./run_tests.sh
+        shell: bash

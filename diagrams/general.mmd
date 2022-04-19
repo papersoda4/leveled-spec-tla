@@ -1,0 +1,45 @@
+flowchart TD
+    %%{init: {'theme': 'base', 'themeVariables': {'edgeLabelBackground':'#fffafa'}}}%%
+
+    style Main fill
+    style Sup fill
+    style Legend fill
+    classDef Box fill:#FFF,stroke:#333,stroke-dasharray:5;
+    classDef Legend fill:#FFF,stroke:#d3d3d3
+    classDef actor fill:#f9f,stroke:#333
+    classDef db fill:#bbf,stroke:#333
+    classDef sbk fill:#333
+    classDef sbd fill:#f96;
+    classDef sec fill:#d3d3d3,stroke:#d3d3d3;
+    class Main,Sup Box
+    class Legend Legend
+
+    ldb[(Store)]:::db
+    bok[Bookie]:::actor
+    ink[Inker]:::actor
+    pen[Penciler]:::actor
+    jor[Journal]
+    led[Ledger]
+    lc[LedgerCache]
+
+    subgraph Legend
+        direction LR
+        
+        act[actor]:::actor
+        ent[entity]
+        role[role]:::sec
+    end
+    
+    subgraph Main[Root]
+        ldb --- bok
+        bok ---|use| Sup
+        bok ---|has| lc
+        lc  -->|is| etc_tab:::sec
+    end
+    
+    subgraph Sup[Supportive]
+        ink -->|has| jor
+        pen -->|has| led
+        led -->|is| merge_tree:::sec
+        jor -->|is| file_map:::sec
+    end

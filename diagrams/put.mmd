@@ -1,0 +1,63 @@
+sequenceDiagram
+    autonumber
+
+    participant usr as User
+    actor bok as Booker
+    participant ledc as Ledger Cache
+    actor ink as Inker
+    participant jol as Journal
+    actor pen as Penciler
+    participant led as Ledger
+
+    Note over ledc: LedgerCache is ets:<br> in memory store
+    Note over bok,ledc: Booker has LedgerCache
+    Note over ink,jol: Inker manages Journal
+    Note over pen,led: Penciler manages Ledger
+    
+    usr->>bok: :put {Sync}
+    bok->>bok: Create LedgerKey
+    %% Write
+    Note over bok,jol: Write
+    bok->>ink: :put
+    activate jol
+    ink->>jol: :put
+    jol->>jol: Try Persist Req 
+    alt Has enough WR cap
+        jol->>jol: Persist Req
+        jol-->>ink: :ok (Persisted)
+    else Else
+        jol-->>ink: :roll (Wait)
+        jol->>jol: Create new Journal file
+        jol->>jol: Persist Req
+        jol-->>ink: :ok (Persisted)
+    end
+    deactivate jol
+    ink-->>bok: :ok, {SQN, objSize}
+    %% Local Sync
+    Note over bok,ledc: Local Sync
+    bok->>bok: Prepare for LedgerCache
+    bok-->>ledc: Add to LedgerCache
+    ledc-->>bok: Added
+    %% Global Sync
+    Note over bok,led: Global Sync (Change acknowledgement)
+    alt Cache not big enough
+        bok->>bok: Reinitialize old cache
+    else Else
+        Note left of bok: Share recent additions of Bookie's <br> memory with Ledger
+        bok->>bok: Share LedgerCache
+        activate pen
+        bok->>pen: :push_mem
+        Note right of pen: Put Ledger cache to <br> L0 memory
+        alt Penciler has no capacity for cache
+            loop Until Penciler has capacity
+                pen-->>bok: :returned (reject)
+                bok->>bok: hold memory (wait)
+                bok->>pen: :push_mem (retry)
+            end
+        else Else
+            pen-->>bok: :accept
+            pen-->>led: Persist Cache (Eventually)
+        end
+        deactivate pen
+        bok->>bok: Reinitialize new local cache (Empty)
+    end

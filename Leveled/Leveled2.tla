@@ -32,7 +32,6 @@ Message(src, dst, op_type, payload) == [
 ]
 PutMessage(key, value) == Message(User, ProcType_Bok, OpType_Put, PutPayload(key, value))
 NewPutMsgFromMsg(msg, src, dst) == Message(src, dst, OpType_Put, PutPayload(msg.payload.key, msg.payload.value)) 
-
 Usr_SendPut ==
     /\  usr_msgs # <<>>
     /\  LET msg == Head(usr_msgs)
@@ -52,8 +51,8 @@ Usr_SendPut ==
     /\ UNCHANGED <<pc>>
 
 Bok_RecvPut ==
-    /\  \E msg \in msg_rqs[ProcType_Bok]:
-            /\  msg.op = OpType_Put
+    /\  \E msg \in msg_rqs[ProcType_Bok]: 
+            /\ msg.op = OpType_Put
             
             /\  LET
                     src == ProcType_Bok

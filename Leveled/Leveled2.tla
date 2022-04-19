@@ -32,6 +32,7 @@ Message(src, dst, op_type, payload) == [
 ]
 PutMessage(key, value) == Message(User, ProcType_Bok, OpType_Put, PutPayload(key, value))
 NewPutMsgFromMsg(msg, src, dst) == Message(src, dst, OpType_Put, PutPayload(msg.payload.key, msg.payload.value)) 
+
 Usr_SendPut ==
     /\  usr_msgs # <<>>
     /\  LET msg == Head(usr_msgs)
@@ -49,6 +50,7 @@ Usr_SendPut ==
                         ELSE [msg_sqs EXCEPT ![src] = Append(@, smsg)]
                     /\ usr_msgs' = Tail(usr_msgs)
     /\ UNCHANGED <<pc>>
+
 Bok_RecvPut ==
     /\  \E msg \in msg_rqs[ProcType_Bok]:
             /\  msg.op = OpType_Put
@@ -68,11 +70,13 @@ Bok_RecvPut ==
 Terminating ==
     /\ pc = PC_Done
     /\ UNCHANGED vars
+
 RECURSIVE SeqToSetInt(_, _)
 SeqToSetInt(seq, set) ==
     IF seq = <<>> THEN set
     ELSE SeqToSetInt(Tail(seq), set \cup {Head(seq)})
 SeqToSet(seq) == SeqToSetInt(seq, {})
+
 TypeInv ==
     /\  DOMAIN msg_sqs \cup DOMAIN msg_rqs \subseteq Processes
     /\  \A p \in Processes:
@@ -81,10 +85,12 @@ TypeInv ==
                     /\ msg.src \in Processes \cup {User}
                     /\ msg.dst \in Processes
                     /\ msg.op  \in Operations
+
 Init ==
     /\ pc = PC_Started
     /\ msg_sqs = [p \in Processes |-> <<>>]
     /\ msg_rqs = [p \in Processes |-> {}]
+
 Next ==
     \/ Usr_SendPut
     \/ Bok_RecvPut

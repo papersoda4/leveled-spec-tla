@@ -1,0 +1,29 @@
+flowchart TD
+    %%{init: {'theme': 'base', 'themeVariables': {'edgeLabelBackground':'#fffafa'}}}%%
+
+    style Main fill
+    classDef Box fill:#FFF,stroke:#333,stroke-dasharray:5;
+    classDef actor fill:#f9f,stroke:#333
+    classDef db fill:#bbf,stroke:#333
+    classDef sbk fill:#333
+    classDef sbd fill:#f96;
+    classDef sec fill:#d3d3d3,stroke:#d3d3d3;
+    class Main Box
+
+    bok[Bookie]:::actor
+    ink[Inker]:::actor
+    pen[Penciler]:::actor
+    jor[Journal]:::sbd
+    led[Ledger]:::sbd
+
+    subgraph Main[ ]
+        bok -->|use| pen
+        bok -->|use| ink
+        pen -->|manage|led
+        ink -->|manage|jor
+
+        led -->|store| keys
+        led -->|store| metadata
+
+        jor -->|store| objects
+    end

@@ -1,0 +1,49 @@
+sequenceDiagram
+    autonumber
+
+    # participant usr as User
+    actor bok as Booker
+    participant ledc as Ledger Cache
+    actor ink as Inker
+    # participant jol as Journal
+    actor pen as Penciler
+    # participant led as Ledger
+
+    Note over bok,pen: fetch_head
+    bok->>ledc: Lookup by key
+    alt Cache exists && has Head
+        ledc-->>bok: {Head}
+    else
+        bok->>pen: Try Fetch
+
+        alt Head exists
+            pen-->>bok: {Sqn, Status, ?, ?} = {Head}
+        else
+            pen-->>bok: :no_obj
+        end
+    end
+    Note over bok,pen: process fetch_head
+    alt :no_obj
+        bok->>bok: :not_found
+    else
+        alt :status = tomb
+            bok->>bok: :not_found
+        else
+            Note over bok: timestamp is expiration?
+            alt :status = active && not timestamp ok
+                bok->>bok: :not_found
+            else
+                bok->>bok: {LedgerKey, Sqn}
+                Note over bok,pen: fetch_value
+                Note over bok: fetch object from journal
+                bok->>ink: {LedgerKey, SQN}
+                alt :not_present
+                    ink-->>bok: :not_present
+                    bok->>bok: :not_found
+                else
+                    ink-->>bok: object
+                    bok->>bok: {:ok, object}
+                end
+            end
+        end
+    end

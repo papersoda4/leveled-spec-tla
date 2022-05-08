@@ -18,6 +18,7 @@ Message(from, to, op_type) == [from |-> from, to |-> to, op |-> op_type]
 Messages ==
          Message("usr", "bok", "put")
     \cup Message("bok", "ink", "put")
+    \cup Message("ink", "bok", "put")
 
 VARIABLES
     (*control*)
@@ -54,8 +55,8 @@ TypeInv ==
     (*control*)
     /\ sys_state \in {"active", "done"}
     /\ pc
-        \in  [{"ink"} -> {"init", "put_recv", "put_roll_active_journal", "put_write"}]
-        \cup [{"bok"} -> {"init"}]
+        \in  [{"ink"} -> {"init", "put_recv", "put_roll_active_journal", "put_write", "put_send_changes"}]
+        \cup [{"bok"} -> {"init", "put_recv", "put_wait_ink", "put_ledger_cache", "put_push_mem"}]
         \cup [{"pen"} -> {"init"}]
     (*messages*)
     /\ msgs_usr \in SUBSET Messages
@@ -83,27 +84,38 @@ Usr_SendPut ==
     /\ UNCHANGED <<sys_state, msgs_send, ink_state, bok_state, pc>>
 
 Bok_RecvPutUsr ==
-    /\ \E r_msg \in msgs_recv["bok"]:
-        /\ r_msg.from = "usr" /\ r_msg.to = "bok" /\ r_msg.op = "put"
+    /\ pc["bok"] = "init"
+    /\ \E msg \in msgs_recv["bok"]:
+        /\ msg.from = "usr" /\ msg.to = "bok" /\ msg.op = "put"
+            /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
+            /\ pc' = [pc EXCEPT !["bok"] = "recv_put"]
+    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state, msgs_send>>
+Bok_SendWriteToJournal ==
+    /\ pc["bok"] = "recv_put"
+    /\
+        LET
+            msg == Message("bok", "ink", "put")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["bok"] = "put_wait_ink"]
+    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state>>
+Bok_RecvJournalChanges ==
+    /\ pc["bok"] = "put_wait_ink"
+    /\ \E msg \in msgs_recv["bok"]:
+        /\ msg.from = "ink" /\ msg.to = "bok" /\ msg.op = "put"
+        /\ pc' = [pc EXCEPT !["bok"] = "put_ledger_cache"]
+        /\ sys_state' = "done"
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, msgs_send, msgs_recv>>
 
-        /\
-            LET
-                s_msg == Message("bok", "ink", "put")
-            IN
-                /\ msgs_recv' = [msgs_recv EXCEPT
-                    !["ink"] = @ \cup {s_msg},
-                    !["bok"] = @ \ {r_msg}]
-                /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, s_msg)]
-    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state, pc>>
-
-Ink_RecvPutBok ==
+Ink_RecvWriteReqBok ==
     /\ pc["ink"] = "init"
-    /\ \E r_msg \in msgs_recv["ink"]:
-        /\ r_msg.from = "bok" /\ r_msg.to = "ink" /\ r_msg.op = "put"
-        /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {r_msg}]
+    /\ \E msg \in msgs_recv["ink"]:
+        /\ msg.from = "bok" /\ msg.to = "ink" /\ msg.op = "put"
+        /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {msg}]
         /\ pc' = [pc EXCEPT !["ink"] = "put_recv"]
     /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state>>
-Ink_ProcPutBok ==
+Ink_CheckCanWrite ==
     /\ pc["ink"] = "put_recv"
     /\ ink_state.is_snapshot = FALSE
 
@@ -125,7 +137,7 @@ Ink_RollActiveJournal ==
          !["manifest_sqn"] = @ + 1]
     /\ pc' = [pc EXCEPT !["ink"] = "put_write"]
     /\ UNCHANGED <<msgs_send, sys_state, msgs_recv, msgs_usr, bok_state>>
-Ink_PutWrite ==
+Ink_WriteValueToJournal ==
     /\ pc["ink"] = "put_write"
 
     /\ ink_state' = [ink_state EXCEPT
@@ -135,23 +147,39 @@ Ink_PutWrite ==
                     ink_state.manifest[ink_state.manifest_sqn],
                     <<ink_state.journal_sqn, "val">>)],
          !["journal_sqn"] = @ + 1]
-    /\ pc' = [pc EXCEPT !["ink"] = "init"]
-    /\ sys_state' = "done"
-    /\ UNCHANGED  <<msgs_send, msgs_recv, msgs_usr, bok_state>>
+    /\ pc' = [pc EXCEPT !["ink"] = "put_send_changes"]
+    /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, msgs_send, msgs_recv>>
+Ink_SendChangesToBok ==
+    /\ pc["ink"] = "put_send_changes"
+    /\  LET
+            msg == Message("ink", "bok", "put")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["ink"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["ink"] = "init"]
+    /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, ink_state>>
+
 Ink_PutValueToJournal ==
-    \/ Ink_RecvPutBok
-    \/ Ink_ProcPutBok
+    \/ Ink_RecvWriteReqBok
+    \/ Ink_CheckCanWrite
     \/ Ink_RollActiveJournal
-    \/ Ink_PutWrite
+    \/ Ink_WriteValueToJournal
+    \/ Ink_SendChangesToBok
+Bok_RecvPut ==
+    \/ Bok_RecvPutUsr
+    \/ Bok_SendWriteToJournal
+    \/ Bok_RecvJournalChanges
+Leveled_Put ==
+    \/ Usr_SendPut
+    \/ Bok_RecvPut
+    \/ Ink_PutValueToJournal
 
 Terminated ==
     /\ sys_state = "done"
     /\ UNCHANGED vars
 
 Next ==
-    \/ Usr_SendPut
-    \/ Bok_RecvPutUsr
-    \/ Ink_PutValueToJournal
+    \/ Leveled_Put
     \/ Terminated
 
 ====

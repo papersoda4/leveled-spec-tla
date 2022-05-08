@@ -30,7 +30,7 @@ VARIABLES
     msgs_recv, \* map to set of received messages for each actor process
     sys_state  \* status of the system
 
-vars == <<msgs_send, msgs_recv, sys_state, msgs_usr>>
+vars == <<msgs_send, msgs_recv, sys_state, msgs_usr, ink_state, bok_state>>
 
 Init ==
     /\ msgs_usr = <<Message("usr", "bok", "put")>>
@@ -40,6 +40,7 @@ Init ==
     /\ bok_state = [
         ledger_cache |-> [LedC_Keys -> LedC_Vals]]
     /\ ink_state = [
+        is_snapshot |-> FALSE,
         journal_sqn |-> 0,
         manifest_sqn |-> 0]
     \* /\ ink_state = [
@@ -52,8 +53,10 @@ TypeInv ==
     /\ msgs_send \in SUBSET Messages
     /\ msgs_recv \in SUBSET Messages
     /\ bok_state.ledger_cache \in [LedC_Keys -> LedC_Vals]
+
     /\ ink_state.journal_sqn \in Nat
-    /\ ink_state. manifest_sqn \in Nat
+    /\ ink_state.manifest_sqn \in Nat
+    /\ ink_state.is_snapshot \in BOOLEAN
     \* /\ \A journal_id \in Range(ink_state.manifest):
     \*         journal_id \in Nat
     \* /\ ink_state.manifest_sqn \in Nat
@@ -68,7 +71,7 @@ Usr_SendPut ==
 
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
             /\ msgs_usr' = Tail(msgs_usr)
-    /\ UNCHANGED <<sys_state, msgs_send>>
+    /\ UNCHANGED <<sys_state, msgs_send, ink_state, bok_state>>
 
 Bok_RecvPutUsr ==
     /\ \E r_msg \in msgs_recv["bok"]:
@@ -81,12 +84,15 @@ Bok_RecvPutUsr ==
                     !["ink"] = @ \cup {s_msg},
                     !["bok"] = @ \ {r_msg}]
                 /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, s_msg)]
-    /\ UNCHANGED <<sys_state, msgs_usr>>
+    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state>>
 
 Ink_RecvPutBok ==
     /\ \E r_msg \in msgs_recv["ink"]:
         /\ r_msg.from = "bok" /\ r_msg.to = "ink" /\ r_msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {r_msg}]
+
+        /\ ink_state.is_snapshot = FALSE
+
         /\ \E journal_file_cap \in {"full", "not_full"}:
                 /\ CASE
                     journal_file_cap = "full" -> \* roll the file
@@ -97,7 +103,7 @@ Ink_RecvPutBok ==
                         ink_state' = [ink_state EXCEPT
                             !["journal_sqn"] = @ + 1]
         /\ sys_state' = "done"
-    /\ UNCHANGED  <<msgs_send, msgs_usr>>
+    /\ UNCHANGED  <<msgs_send, msgs_usr, bok_state>>
 
 Terminated ==
     /\ sys_state = "done"

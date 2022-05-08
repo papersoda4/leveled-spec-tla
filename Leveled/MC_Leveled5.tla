@@ -1,5 +1,5 @@
 ---- MODULE MC_Leveled5 ----
-EXTENDS Leveled4
+EXTENDS Leveled5
 
 Fairness ==
     /\ WF_sys_state(Terminated)

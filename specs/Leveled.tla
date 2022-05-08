@@ -105,8 +105,14 @@ Bok_RecvJournalChanges ==
     /\ \E msg \in msgs_recv["bok"]:
         /\ msg.from = "ink" /\ msg.to = "bok" /\ msg.op = "put"
         /\ pc' = [pc EXCEPT !["bok"] = "put_ledger_cache"]
-        /\ sys_state' = "done"
-    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, msgs_send, msgs_recv>>
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, msgs_send, msgs_recv, sys_state>>
+Bok_AddToLedgerCache ==
+    /\ pc["bok"] = "put_ledger_cache"
+
+    /\ bok_state' = [bok_state EXCEPT !["ledger_cache"] = {x @@ ("k3" :> "v3"): x \in @}]
+    /\ pc' = [pc EXCEPT !["bok"] = "put_push_mem"]
+    /\ sys_state' = "done"
+    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv>>
 
 Ink_RecvWriteReqBok ==
     /\ pc["ink"] = "init"
@@ -165,14 +171,13 @@ Ink_PutValueToJournal ==
     \/ Ink_RollActiveJournal
     \/ Ink_WriteValueToJournal
     \/ Ink_SendChangesToBok
-Bok_RecvPut ==
-    \/ Bok_RecvPutUsr
-    \/ Bok_SendWriteToJournal
-    \/ Bok_RecvJournalChanges
 Leveled_Put ==
     \/ Usr_SendPut
-    \/ Bok_RecvPut
+    \/ Bok_RecvPutUsr
+    \/ Bok_SendWriteToJournal
     \/ Ink_PutValueToJournal
+    \/ Bok_RecvJournalChanges
+    \/ Bok_AddToLedgerCache
 
 Terminated ==
     /\ sys_state = "done"

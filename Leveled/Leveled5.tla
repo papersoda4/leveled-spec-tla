@@ -23,6 +23,7 @@ Messages ==
     \cup Message("bok", "ink", "put")
 
 VARIABLES
+    ink_state, \* state of the Inker actor process
     bok_state, \* state of the Bookie actor process
     msgs_usr,  \* messages that the user sends to the system
     msgs_send, \* map to seq of messages that each actor process sends
@@ -38,6 +39,9 @@ Init ==
     /\ msgs_recv = [actor \in {"ink", "bok", "pen"} |-> {}]
     /\ bok_state = [
         ledger_cache |-> [LedC_Keys -> LedC_Vals]]
+    /\ ink_state = [
+        journal_sqn |-> 0,
+        manifest_sqn |-> 0]
     \* /\ ink_state = [
     \*     manifest |-> [journal |-> <<>>, active |-> 1],
     \*     manifest_sqn |-> 0]
@@ -48,6 +52,8 @@ TypeInv ==
     /\ msgs_send \in SUBSET Messages
     /\ msgs_recv \in SUBSET Messages
     /\ bok_state.ledger_cache \in [LedC_Keys -> LedC_Vals]
+    /\ ink_state.journal_sqn \in Nat
+    /\ ink_state. manifest_sqn \in Nat
     \* /\ \A journal_id \in Range(ink_state.manifest):
     \*         journal_id \in Nat
     \* /\ ink_state.manifest_sqn \in Nat
@@ -81,6 +87,15 @@ Ink_RecvPutBok ==
     /\ \E r_msg \in msgs_recv["ink"]:
         /\ r_msg.from = "bok" /\ r_msg.to = "ink" /\ r_msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {r_msg}]
+        /\ \E journal_file_cap \in {"full", "not_full"}:
+                /\ CASE
+                    journal_file_cap = "full" -> \* roll the file
+                        ink_state' = [ink_state EXCEPT
+                            !["journal_sqn"] = @ + 1,
+                            !["manifest_sqn"] = @ + 1]
+                    [] journal_file_cap = "not_full" ->
+                        ink_state' = [ink_state EXCEPT
+                            !["journal_sqn"] = @ + 1]
         /\ sys_state' = "done"
     /\ UNCHANGED  <<msgs_send, msgs_usr>>
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-root_dir="./Leveled"
+root_dir="./spec"
 declare -a test_files=(
-    "MC_Leveled5"
+    "MC_Leveled"
 )
 
 function run_test_file() {

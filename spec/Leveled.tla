@@ -40,12 +40,11 @@ Init ==
     /\ bok_state = [
         ledger_cache |-> [LedC_Keys -> LedC_Vals]]
     /\ ink_state = [
+        manifest |-> [sqn \in {0, 1, 2} |-> <<>>],
+        status |-> "init",
         is_snapshot |-> FALSE,
         journal_sqn |-> 0,
-        manifest_sqn |-> 0]
-    \* /\ ink_state = [
-    \*     manifest |-> [journal |-> <<>>, active |-> 1],
-    \*     manifest_sqn |-> 0]
+        manifest_sqn |-> 2]
 
 TypeInv ==
     /\ sys_state \in {"active", "done"}
@@ -57,6 +56,8 @@ TypeInv ==
     /\ ink_state.journal_sqn \in Nat
     /\ ink_state.manifest_sqn \in Nat
     /\ ink_state.is_snapshot \in BOOLEAN
+    /\ ink_state.active_journal \in Nat
+    /\ ink_state.status \in {"init", "recv_put", "put_roll_active_journal", "put_write"}
     \* /\ \A journal_id \in Range(ink_state.manifest):
     \*         journal_id \in Nat
     \* /\ ink_state.manifest_sqn \in Nat
@@ -76,6 +77,7 @@ Usr_SendPut ==
 Bok_RecvPutUsr ==
     /\ \E r_msg \in msgs_recv["bok"]:
         /\ r_msg.from = "usr" /\ r_msg.to = "bok" /\ r_msg.op = "put"
+
         /\
             LET
                 s_msg == Message("bok", "ink", "put")
@@ -87,23 +89,55 @@ Bok_RecvPutUsr ==
     /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state>>
 
 Ink_RecvPutBok ==
+    /\ ink_state.status = "init"
     /\ \E r_msg \in msgs_recv["ink"]:
         /\ r_msg.from = "bok" /\ r_msg.to = "ink" /\ r_msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {r_msg}]
 
-        /\ ink_state.is_snapshot = FALSE
+        /\ ink_state' = [ink_state EXCEPT !["status"] = "recv_put"]
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state>>
+Ink_ProcPutBok ==
+    /\ ink_state.status = "recv_put"
+    /\ ink_state.is_snapshot = FALSE
 
-        /\ \E journal_file_cap \in {"full", "not_full"}:
-                /\ CASE
-                    journal_file_cap = "full" -> \* roll the file
-                        ink_state' = [ink_state EXCEPT
-                            !["journal_sqn"] = @ + 1,
-                            !["manifest_sqn"] = @ + 1]
-                    [] journal_file_cap = "not_full" ->
-                        ink_state' = [ink_state EXCEPT
-                            !["journal_sqn"] = @ + 1]
-        /\ sys_state' = "done"
-    /\ UNCHANGED  <<msgs_send, msgs_usr, bok_state>>
+    /\ \E journal_file_cap \in {"full", "not_full"}:
+        /\ CASE
+            journal_file_cap = "full" ->
+                ink_state' = [ink_state EXCEPT
+                    !["status"] = "put_roll_active_journal"]
+            [] journal_file_cap = "not_full" ->
+                ink_state' = [ink_state EXCEPT
+                    !["status"] = "put_write"]
+    /\ UNCHANGED <<msgs_send, msgs_recv, sys_state, msgs_usr, bok_state>>
+Ink_RollActiveJournal ==
+    /\ ink_state.status = "put_roll_active_journal"
+
+    /\ ink_state' = [ink_state EXCEPT
+         !["manifest"] =
+            (ink_state.manifest_sqn + 1 :> <<>>)
+            @@ ink_state.manifest,
+         !["journal_sqn"] = @ + 1,
+         !["manifest_sqn"] = @ + 1,
+         !["status"] = "put_write"]
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_recv, msgs_usr, bok_state>>
+Ink_PutWrite ==
+    /\ ink_state.status = "put_write"
+
+    /\ ink_state' = [ink_state EXCEPT
+         !["manifest"] = [ink_state.manifest EXCEPT
+             ![ink_state.manifest_sqn] =
+                Append(
+                    ink_state.manifest[ink_state.manifest_sqn],
+                    <<ink_state.journal_sqn, "val">>)],
+         !["journal_sqn"] = @ + 1,
+         !["status"] = "init"]
+    /\ sys_state' = "done"
+    /\ UNCHANGED  <<msgs_send, msgs_recv, msgs_usr, bok_state>>
+Ink_PutValueToJournal ==
+    \/ Ink_RecvPutBok
+    \/ Ink_ProcPutBok
+    \/ Ink_RollActiveJournal
+    \/ Ink_PutWrite
 
 Terminated ==
     /\ sys_state = "done"
@@ -112,8 +146,7 @@ Terminated ==
 Next ==
     \/ Usr_SendPut
     \/ Bok_RecvPutUsr
-    \/ Ink_RecvPutBok
+    \/ Ink_PutValueToJournal
     \/ Terminated
 
-\* check property is sequential
 ====

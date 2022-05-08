@@ -2,10 +2,7 @@
 
 root_dir="./Leveled"
 declare -a test_files=(
-    "MC_Leveled1"
-    "MC_Leveled2"
-    "MC_Process1"
-    "MC_Leveled4"
+    "MC_Leveled5"
 )
 
 function run_test_file() {

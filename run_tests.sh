@@ -1,6 +1,6 @@
 #!/bin/bash
 
-root_dir="./spec"
+root_dir="./specs"
 declare -a test_files=(
     "MC_Leveled"
 )

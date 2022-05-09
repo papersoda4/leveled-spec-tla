@@ -2,7 +2,7 @@
 EXTENDS Leveled
 
 Fairness ==
-    /\ WF_sys_state(Terminated)
+    /\ WF_<<sys_state, msgs_usr>>(Terminated)
 
 ValidTermination == TRUE
     \* <>(sys_state = "done" /\

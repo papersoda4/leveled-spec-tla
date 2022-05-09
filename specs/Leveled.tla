@@ -50,7 +50,7 @@ Init ==
     /\ sys_state = "active"
     /\ pc = [actor \in {"ink", "bok", "pen"} |-> "init"]
     (*messages*)
-    /\ msgs_usr = <<Message("usr", "bok", "put")>>
+    /\ msgs_usr = <<Message("usr", "bok", "put"), Message("usr", "bok", "get")>>
     /\ msgs_send = [actor \in {"ink", "bok", "pen"} |-> <<>>]
     /\ msgs_recv = [actor \in {"ink", "bok", "pen"} \cup {"usr"} |-> {}]
     (*process state*)
@@ -71,9 +71,11 @@ TypeInv ==
     /\ pc
         \in  [{"ink"} -> {
             "init", "put_recv", "put_roll_active_journal", "put_write", "put_send_changes"}]
-        \cup [{"bok"} -> {
-            "init", "put_recv", "put_wait_ink", "put_ledger_cache", "put_push_mem",
-            "put_wait_push_mem", "put_recv_push_mem", "put_send_usr", "put_try_pushmem"}]
+        \cup [{"bok"} ->
+            {"init"}
+            \cup {"put_recv", "put_wait_ink", "put_ledger_cache", "put_push_mem",
+            "put_wait_push_mem", "put_recv_push_mem", "put_send_usr", "put_try_pushmem"}
+            \cup {"get_recv"}]
         \cup [{"pen"} -> {
             "init", "put_recv", "put_push_ok", "put_push_ret", "put_cache_full",
             "put_cache_busy", "put_push_mem"}]
@@ -92,13 +94,23 @@ TypeInv ==
     /\ pen_state.is_snapshot \in BOOLEAN
 
 Usr_SendPut ==
-    /\ sys_state # "done"
     /\ msgs_usr # <<>>
     /\
         LET
             msg == Head(msgs_usr)
         IN
             /\ msg.op = "put"
+
+            /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
+            /\ msgs_usr' = Tail(msgs_usr)
+    /\ UNCHANGED <<sys_state, msgs_send, ink_state, bok_state, pc, pen_state>>
+Usr_SendGet ==
+    /\ msgs_usr # <<>>
+    /\
+        LET
+            msg == Head(msgs_usr)
+        IN
+            /\ msg.op = "get"
 
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
             /\ msgs_usr' = Tail(msgs_usr)
@@ -306,6 +318,20 @@ Ink_SendChangesToBok ==
             /\ pc' = [pc EXCEPT !["ink"] = "init"]
     /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, ink_state, pen_state>>
 
+Bok_RecvGetUsr ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "init"
+    /\ \E msg \in msgs_recv["bok"]:
+        /\ msg.from = "usr" /\ msg.to = "bok" /\ msg.op = "get"
+            /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
+            /\ pc' = [pc EXCEPT !["bok"] = "get_recv"]
+            /\ sys_state' = "done"
+    /\ UNCHANGED <<msgs_usr, msgs_send, ink_state, bok_state, pen_state>>
+\* Bok_FetchHead ==
+\*     /\ sys_state # "done"
+\*     /\ pc["bok"] = "init"
+\*     /\ \E m
+
 Ink_PutValueToJournal ==
     \/ Ink_RecvWriteReqBok
     \/ Ink_CheckCanWrite
@@ -319,6 +345,9 @@ Pen_Pushmem ==
     \/ Pen_RetryPushLaterBok
     \/ Pen_Push
     \/ Pen_SendPushmemBok
+Leveled_Get ==
+    \/ Usr_SendGet
+    \/ Bok_RecvGetUsr
 Leveled_Put ==
     \/
         \/ Usr_SendPut
@@ -340,9 +369,11 @@ Leveled_Put ==
 
 Terminated ==
     /\ sys_state = "done"
+    /\ msgs_usr = <<>>
     /\ UNCHANGED vars
 
 Next ==
+    \/ Leveled_Get
     \/ Leveled_Put
     \/ Terminated
 

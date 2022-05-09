@@ -62,7 +62,8 @@ Init ==
         journal_sqn |-> 0,
         manifest_sqn |-> 2]
     /\ pen_state = [
-        is_snapshot |-> FALSE]
+        is_snapshot |-> FALSE,
+        memory |-> <<>>]
 
 TypeInv ==
     (*control*)
@@ -232,8 +233,9 @@ Pen_RollMemory ==
 Pen_Push ==
     /\ sys_state # "done"
     /\ pc["pen"] = "put_push_mem"
+    /\ pen_state' = [pen_state EXCEPT !["memory"] = Append(@, "val")]
     /\ pc' = [pc EXCEPT !["pen"] = "put_push_ok"]
-    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, msgs_recv, pen_state>>
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, msgs_recv>>
 Pen_SendPushmemBok ==
     /\ sys_state # "done"
     /\
@@ -318,18 +320,23 @@ Pen_Pushmem ==
     \/ Pen_Push
     \/ Pen_SendPushmemBok
 Leveled_Put ==
-    \/ Usr_SendPut
-    \/ Bok_RecvPutUsr
-    \/ Bok_SendWriteToJournal
-    \/ Ink_PutValueToJournal
-    \/ Bok_RecvJournalChanges
-    \/ Bok_AddToLedgerCache
-    \/ Bok_CheckPushMemReady
-    \/ Bok_SendPushMemPen
-    \/ Pen_Pushmem
-    \/ Bok_RecvPushMemOk
-    \/ Bok_CleanCache
-    \/ Bok_PutSendUsr
+    \/
+        \/ Usr_SendPut
+        \/ Bok_RecvPutUsr
+    \/
+        \/ Bok_SendWriteToJournal
+        \/ Ink_PutValueToJournal
+        \/ Bok_RecvJournalChanges
+    \/
+        \/ Bok_AddToLedgerCache
+    \/
+        \/ Bok_CheckPushMemReady
+        \/ Bok_SendPushMemPen
+        \/ Pen_Pushmem
+        \/ Bok_RecvPushMemOk
+        \/ Bok_CleanCache
+    \/
+        \/ Bok_PutSendUsr
 
 Terminated ==
     /\ sys_state = "done"

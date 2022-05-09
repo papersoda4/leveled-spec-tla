@@ -29,6 +29,7 @@ Messages ==
     \cup Message("bok", "pen", "put")
     \cup Message("pen", "bok", "put")
     \cup Message("bok", "usr", "put")
+    \cup Message("usr", "bok", "get")
 
 VARIABLES
     (*control*)
@@ -325,8 +326,70 @@ Bok_RecvGetUsr ==
         /\ msg.from = "usr" /\ msg.to = "bok" /\ msg.op = "get"
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
             /\ pc' = [pc EXCEPT !["bok"] = "get_recv"]
+    /\ UNCHANGED <<sys_state, msgs_usr, msgs_send, ink_state, bok_state, pen_state>>
+Bok_ProcGet ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_recv"
+    /\ pc' = [pc EXCEPT !["bok"] = "fetch_head"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Bok_FetchHead ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "fetch_head"
+    /\ \E has_ledger_cache \in {TRUE, FALSE}:
+            IF has_ledger_cache THEN
+                pc' = [pc EXCEPT !["bok"] = "get_recv_head"]
+            ELSE
+                \* pc' = [pc EXCEPT !["bok"] = "get_send_fetch"]
+                pc' = [pc EXCEPT !["bok"] = "get_found"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Bok_RecvHead ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_recv_head"
+    /\ \E head_not_found \in {TRUE, FALSE}:
+        IF head_not_found THEN
+            pc' = [pc EXCEPT !["bok"] = "get_no_head"]
+        ELSE
+            \E obj_is_tomb \in {TRUE, FALSE}:
+                IF obj_is_tomb THEN
+                    pc' = [pc EXCEPT !["bok"] = "get_obj_tomb"]
+                ELSE
+                    \E obj_is_exp \in {TRUE, FALSE}:
+                        IF obj_is_exp THEN
+                            pc' = [pc EXCEPT !["bok"] = "get_obj_exp"]
+                        ELSE
+                            pc' = [pc EXCEPT !["bok"] = "get_found"]
+                            \* pc' = [pc EXCEPT !["bok"] = "get_fetch_obj"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Bok_HeadNotFound ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_no_head"
+    /\ pc' = [pc EXCEPT !["bok"] = "get_not_found"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Bok_HeadObjIsTomb ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_obj_tomb"
+    /\ pc' = [pc EXCEPT !["bok"] = "get_not_found"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Bok_HeadObjIsExpired ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_obj_exp"
+    /\ pc' = [pc EXCEPT !["bok"] = "get_not_found"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+
+Bok_GetSendUsr ==
+    /\ sys_state # "done"
+    /\
+        \/ pc["bok"] = "get_not_found"
+        \/ pc["bok"] = "get_found"
+    /\
+        LET
+            msg == Message("bok", "usr", "get")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["usr"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["bok"] = "init"]
             /\ sys_state' = "done"
-    /\ UNCHANGED <<msgs_usr, msgs_send, ink_state, bok_state, pen_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state>>
 \* Bok_FetchHead ==
 \*     /\ sys_state # "done"
 \*     /\ pc["bok"] = "init"
@@ -348,6 +411,13 @@ Pen_Pushmem ==
 Leveled_Get ==
     \/ Usr_SendGet
     \/ Bok_RecvGetUsr
+    \/ Bok_ProcGet
+    \/ Bok_FetchHead
+    \/ Bok_RecvHead
+    \/ Bok_HeadObjIsExpired
+    \/ Bok_HeadObjIsTomb
+    \/ Bok_HeadNotFound
+    \/ Bok_GetSendUsr
 Leveled_Put ==
     \/
         \/ Usr_SendPut

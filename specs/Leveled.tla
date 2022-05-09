@@ -33,9 +33,11 @@ VARIABLES
     msgs_recv, \* map to set of received messages for each actor process
     (*process state*)
     ink_state, \* state of the Inker actor process
-    bok_state \* state of the Bookie actor process
+    bok_state, \* state of the Bookie actor process
+    pen_state  \* state of the Penciller actor process
 
-vars == <<msgs_send, msgs_recv, sys_state, msgs_usr, ink_state, bok_state, pc>>
+vars == <<msgs_send, msgs_recv, sys_state, msgs_usr, ink_state, bok_state, pc, pen_state
+>>
 
 Init ==
     (*control*)
@@ -53,6 +55,8 @@ Init ==
         is_snapshot |-> FALSE,
         journal_sqn |-> 0,
         manifest_sqn |-> 2]
+    /\ pen_state = [
+        is_snapshot |-> FALSE]
 
 TypeInv ==
     (*control*)
@@ -63,7 +67,7 @@ TypeInv ==
         \cup [{"bok"} -> {
             "init", "put_recv", "put_wait_ink", "put_ledger_cache", "put_push_mem",
             "put_wait_push_mem", "put_recv_push_mem", "put_send_usr"}]
-        \cup [{"pen"} -> {"init", "put_recv"}]
+        \cup [{"pen"} -> {"init", "put_recv", "put_push_ok", "put_push_ret", "put_cache_full", "put_cache_busy", "put_push_mem"}]
     (*messages*)
     /\ msgs_usr \in SUBSET Messages
     /\ msgs_send \in SUBSET Messages
@@ -75,6 +79,8 @@ TypeInv ==
     /\ ink_state.journal_sqn \in Nat
     /\ ink_state.manifest_sqn \in Nat
     /\ ink_state.is_snapshot \in BOOLEAN
+    \* penciller
+    /\ pen_state.is_snapshot \in BOOLEAN
 
 Usr_SendPut ==
     /\ sys_state # "done"
@@ -87,7 +93,7 @@ Usr_SendPut ==
 
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
             /\ msgs_usr' = Tail(msgs_usr)
-    /\ UNCHANGED <<sys_state, msgs_send, ink_state, bok_state, pc>>
+    /\ UNCHANGED <<sys_state, msgs_send, ink_state, bok_state, pc, pen_state>>
 
 Bok_RecvPutUsr ==
     /\ sys_state # "done"
@@ -96,7 +102,7 @@ Bok_RecvPutUsr ==
         /\ msg.from = "usr" /\ msg.to = "bok" /\ msg.op = "put"
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
             /\ pc' = [pc EXCEPT !["bok"] = "recv_put"]
-    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state, msgs_send>>
+    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state, msgs_send, pen_state>>
 Bok_SendWriteToJournal ==
     /\ sys_state # "done"
     /\ pc["bok"] = "recv_put"
@@ -107,7 +113,7 @@ Bok_SendWriteToJournal ==
             /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \cup {msg}]
             /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
             /\ pc' = [pc EXCEPT !["bok"] = "put_wait_ink"]
-    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state>>
+    /\ UNCHANGED <<sys_state, msgs_usr, ink_state, bok_state, pen_state>>
 Bok_RecvJournalChanges ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_wait_ink"
@@ -115,13 +121,13 @@ Bok_RecvJournalChanges ==
         /\ msg.from = "ink" /\ msg.to = "bok" /\ msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
         /\ pc' = [pc EXCEPT !["bok"] = "put_ledger_cache"]
-    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, msgs_send, sys_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, msgs_send, sys_state, pen_state>>
 Bok_AddToLedgerCache ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_ledger_cache"
     /\ bok_state' = [bok_state EXCEPT !["ledger_cache"] = {x @@ ("k3" :> "v3"): x \in @}]
     /\ pc' = [pc EXCEPT !["bok"] = "put_push_mem"]
-    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv, sys_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv, sys_state, pen_state>>
 Bok_SendPushMemPen ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_push_mem"
@@ -132,7 +138,7 @@ Bok_SendPushMemPen ==
             /\ msgs_recv' = [msgs_recv EXCEPT !["pen"] = @ \cup {msg}]
             /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
             /\ pc' = [pc EXCEPT !["bok"] = "put_wait_push_mem"]
-    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, ink_state, sys_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, ink_state, sys_state, pen_state>>
 Bok_RecvPushMemOk ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_wait_push_mem"
@@ -140,13 +146,13 @@ Bok_RecvPushMemOk ==
         /\ msg.from = "pen" /\ msg.to = "bok" /\ msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
         /\ pc' = [pc EXCEPT !["bok"] = "put_recv_push_mem"]
-    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, sys_state, bok_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, sys_state, bok_state, pen_state>>
 Bok_CleanCache ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_recv_push_mem"
     /\ bok_state' = [bok_state EXCEPT !["ledger_cache"] = {}]
     /\ pc' = [pc EXCEPT !["bok"] = "put_send_usr"]
-    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv, sys_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv, sys_state, pen_state>>
 Bok_PutSendUsr ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_send_usr"
@@ -158,19 +164,50 @@ Bok_PutSendUsr ==
             /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
             /\ pc' = [pc EXCEPT !["bok"] = "init"]
             /\ sys_state' = "done"
-    /\ UNCHANGED <<msgs_usr, ink_state, bok_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state>>
 
 Pen_RecvPushmemBok ==
     /\ sys_state # "done"
     /\ pc["pen"] = "init"
+    /\ pen_state.is_snapshot = FALSE
     /\ \E msg \in msgs_recv["pen"]:
         /\ msg.from = "bok" /\ msg.to = "pen" /\ msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["pen"] = @ \ {msg}]
         /\ pc' = [pc EXCEPT !["pen"] = "put_recv"]
-    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state>>
-Pen_SendPushmemBok ==
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, pen_state>>
+Pen_ProcPushmemBok ==
     /\ sys_state # "done"
     /\ pc["pen"] = "put_recv"
+    /\ \E cache_blocked_by_pending_work \in {TRUE, FALSE}:
+            IF cache_blocked_by_pending_work THEN
+                pc' = [pc EXCEPT !["pen"] = "put_cache_busy"]
+            ELSE
+                \E cache_is_full \in {TRUE, FALSE}:
+                    IF cache_is_full THEN
+                        pc' = [pc EXCEPT !["pen"] = "put_cache_full"]
+                    ELSE
+                        pc' = [pc EXCEPT !["pen"] = "put_push_mem"]
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, msgs_recv, pen_state>>
+Pen_RetryPushLaterBok ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "put_cache_busy"
+    /\ pc' = [pc EXCEPT !["pen"] = "put_push_ret"]
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, msgs_recv, pen_state>>
+Pen_RollMemory ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "put_cache_full"
+    /\ pc' = [pc EXCEPT !["pen"] = "put_push_ret"]
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, msgs_recv, pen_state>>
+Pen_Push ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "put_push_mem"
+    /\ pc' = [pc EXCEPT !["pen"] = "put_push_ok"]
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, msgs_recv, pen_state>>
+Pen_SendPushmemBok ==
+    /\ sys_state # "done"
+    /\
+        \/ pc["pen"] = "put_push_ret"
+        \/ pc["pen"] = "put_push_ok"
     /\
         LET
             msg == Message("pen", "bok", "put")
@@ -178,7 +215,7 @@ Pen_SendPushmemBok ==
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
             /\ msgs_send' = [msgs_send EXCEPT !["pen"] = Append(@, msg)]
             /\ pc' = [pc EXCEPT !["pen"] = "init"]
-    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, ink_state, sys_state>>
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, ink_state, sys_state, pen_state>>
 
 Ink_RecvWriteReqBok ==
     /\ sys_state # "done"
@@ -187,7 +224,7 @@ Ink_RecvWriteReqBok ==
         /\ msg.from = "bok" /\ msg.to = "ink" /\ msg.op = "put"
         /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {msg}]
         /\ pc' = [pc EXCEPT !["ink"] = "put_recv"]
-    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state>>
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_usr, bok_state, ink_state, pen_state>>
 Ink_CheckCanWrite ==
     /\ sys_state # "done"
     /\ pc["ink"] = "put_recv"
@@ -199,7 +236,7 @@ Ink_CheckCanWrite ==
                 pc' = [pc EXCEPT !["ink"] = "put_roll_active_journal"]
             [] journal_file_cap = "not_full" ->
                 pc' = [pc EXCEPT !["ink"] = "put_write"]
-    /\ UNCHANGED <<msgs_send, msgs_recv, sys_state, msgs_usr, bok_state, ink_state>>
+    /\ UNCHANGED <<msgs_send, msgs_recv, sys_state, msgs_usr, bok_state, ink_state, pen_state>>
 Ink_RollActiveJournal ==
     /\ sys_state # "done"
     /\ pc["ink"] = "put_roll_active_journal"
@@ -211,7 +248,7 @@ Ink_RollActiveJournal ==
          !["journal_sqn"] = @ + 1,
          !["manifest_sqn"] = @ + 1]
     /\ pc' = [pc EXCEPT !["ink"] = "put_write"]
-    /\ UNCHANGED <<msgs_send, sys_state, msgs_recv, msgs_usr, bok_state>>
+    /\ UNCHANGED <<msgs_send, sys_state, msgs_recv, msgs_usr, bok_state, pen_state>>
 Ink_WriteValueToJournal ==
     /\ sys_state # "done"
     /\ pc["ink"] = "put_write"
@@ -224,7 +261,7 @@ Ink_WriteValueToJournal ==
                     <<ink_state.journal_sqn, "val">>)],
          !["journal_sqn"] = @ + 1]
     /\ pc' = [pc EXCEPT !["ink"] = "put_send_changes"]
-    /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, msgs_send, msgs_recv>>
+    /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, msgs_send, msgs_recv, pen_state>>
 Ink_SendChangesToBok ==
     /\ sys_state # "done"
     /\ pc["ink"] = "put_send_changes"
@@ -234,7 +271,7 @@ Ink_SendChangesToBok ==
             /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
             /\ msgs_send' = [msgs_send EXCEPT !["ink"] = Append(@, msg)]
             /\ pc' = [pc EXCEPT !["ink"] = "init"]
-    /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, ink_state>>
+    /\ UNCHANGED  <<msgs_usr, bok_state, sys_state, ink_state, pen_state>>
 
 Ink_PutValueToJournal ==
     \/ Ink_RecvWriteReqBok
@@ -244,6 +281,10 @@ Ink_PutValueToJournal ==
     \/ Ink_SendChangesToBok
 Pen_Pushmem ==
     \/ Pen_RecvPushmemBok
+    \/ Pen_ProcPushmemBok
+    \/ Pen_RollMemory
+    \/ Pen_RetryPushLaterBok
+    \/ Pen_Push
     \/ Pen_SendPushmemBok
 Leveled_Put ==
     \/ Usr_SendPut

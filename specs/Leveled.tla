@@ -12,6 +12,13 @@ Max(set) == CHOOSE item \in set:
     \A other \in set: item >= other
 \* get last element of the sequence
 Last(seq) == seq[Len(seq)]
+IsSortedSeq(seq) ==
+    /\ seq # <<>>
+    /\ \A i \in 1..Len(seq):
+        \A j \in 1..Len(seq):
+           /\ i # j
+           /\ i \leq j
+                => seq[i] \leq seq[j]
 
 Message(from, to, op_type) == [from |-> from, to |-> to, op |-> op_type]
 
@@ -36,8 +43,7 @@ VARIABLES
     bok_state, \* state of the Bookie actor process
     pen_state  \* state of the Penciller actor process
 
-vars == <<msgs_send, msgs_recv, sys_state, msgs_usr, ink_state, bok_state, pc, pen_state
->>
+vars == <<msgs_send, msgs_recv, sys_state, msgs_usr, ink_state, bok_state, pc, pen_state>>
 
 Init ==
     (*control*)
@@ -66,8 +72,10 @@ TypeInv ==
             "init", "put_recv", "put_roll_active_journal", "put_write", "put_send_changes"}]
         \cup [{"bok"} -> {
             "init", "put_recv", "put_wait_ink", "put_ledger_cache", "put_push_mem",
-            "put_wait_push_mem", "put_recv_push_mem", "put_send_usr"}]
-        \cup [{"pen"} -> {"init", "put_recv", "put_push_ok", "put_push_ret", "put_cache_full", "put_cache_busy", "put_push_mem"}]
+            "put_wait_push_mem", "put_recv_push_mem", "put_send_usr", "put_try_pushmem"}]
+        \cup [{"pen"} -> {
+            "init", "put_recv", "put_push_ok", "put_push_ret", "put_cache_full",
+            "put_cache_busy", "put_push_mem"}]
     (*messages*)
     /\ msgs_usr \in SUBSET Messages
     /\ msgs_send \in SUBSET Messages
@@ -126,8 +134,43 @@ Bok_AddToLedgerCache ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_ledger_cache"
     /\ bok_state' = [bok_state EXCEPT !["ledger_cache"] = {x @@ ("k3" :> "v3"): x \in @}]
-    /\ pc' = [pc EXCEPT !["bok"] = "put_push_mem"]
+    /\ pc' = [pc EXCEPT !["bok"] = "put_send_usr"]
     /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv, sys_state, pen_state>>
+Bok_PutSendUsr ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "put_send_usr"
+    /\
+        LET
+            msg == Message("bok", "usr", "put")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["usr"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["bok"] = "put_try_pushmem"]
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, sys_state>>
+
+(*
+    background process 'push_mem'
+    writes LedgerCache of Bookie to Penciller
+    - LedgerCache contains most recent changes
+    'push_mem' process is executed if
+    - Penciller is not busy, depending on last sync (backpressure)
+    - LedgerCache has reached a certain capacity (has n amount of entries written)
+*)
+Bok_CheckPushMemReady ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "put_try_pushmem"
+    /\ \E cache_large_enough \in {TRUE, FALSE}:
+        IF cache_large_enough THEN
+            /\ pc' = [pc EXCEPT !["bok"] = "put_push_mem"]
+            /\ UNCHANGED <<sys_state, msgs_usr, msgs_send, msgs_recv, pen_state, ink_state, bok_state>>
+        ELSE
+            /\ sys_state' = "done"
+            /\ UNCHANGED <<pc, msgs_usr, msgs_send, msgs_recv, pen_state, ink_state, bok_state>>
+
+\* Bok_CheckPenBusy ==
+\*     \E penciller_is_busy \in {TRUE, FALSE}:
+\*         IF penciller_is_busy THEN
+
 Bok_SendPushMemPen ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_push_mem"
@@ -151,20 +194,8 @@ Bok_CleanCache ==
     /\ sys_state # "done"
     /\ pc["bok"] = "put_recv_push_mem"
     /\ bok_state' = [bok_state EXCEPT !["ledger_cache"] = {}]
-    /\ pc' = [pc EXCEPT !["bok"] = "put_send_usr"]
-    /\ UNCHANGED <<msgs_usr, ink_state, msgs_send, msgs_recv, sys_state, pen_state>>
-Bok_PutSendUsr ==
-    /\ sys_state # "done"
-    /\ pc["bok"] = "put_send_usr"
-    /\
-        LET
-            msg == Message("bok", "usr", "put")
-        IN
-            /\ msgs_recv' = [msgs_recv EXCEPT !["usr"] = @ \cup {msg}]
-            /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
-            /\ pc' = [pc EXCEPT !["bok"] = "init"]
-            /\ sys_state' = "done"
-    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state>>
+    /\ sys_state' = "done"
+    /\ UNCHANGED <<msgs_usr, msgs_send, msgs_recv, pen_state, ink_state, pc>>
 
 Pen_RecvPushmemBok ==
     /\ sys_state # "done"
@@ -293,6 +324,7 @@ Leveled_Put ==
     \/ Ink_PutValueToJournal
     \/ Bok_RecvJournalChanges
     \/ Bok_AddToLedgerCache
+    \/ Bok_CheckPushMemReady
     \/ Bok_SendPushMemPen
     \/ Pen_Pushmem
     \/ Bok_RecvPushMemOk

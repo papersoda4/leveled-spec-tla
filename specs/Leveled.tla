@@ -30,6 +30,8 @@ Messages ==
     \cup Message("pen", "bok", "put")
     \cup Message("bok", "usr", "put")
     \cup Message("usr", "bok", "get")
+    \cup Message("bok", "pen", "get")
+    \cup Message("pen", "bok", "get")
 
 VARIABLES
     (*control*)
@@ -340,8 +342,65 @@ Bok_FetchHead ==
                 pc' = [pc EXCEPT !["bok"] = "get_recv_head"]
             ELSE
                 \* pc' = [pc EXCEPT !["bok"] = "get_send_fetch"]
-                pc' = [pc EXCEPT !["bok"] = "get_found"]
+                pc' = [pc EXCEPT !["bok"] = "get_send_fetch"]
     /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+
+Bok_SendFetch ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_send_fetch"
+    /\  LET
+            msg == Message("bok", "pen", "get")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["pen"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["bok"] = "wait_fetch"]
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, sys_state>>
+
+Pen_RecvFetch ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "init"
+    /\ \E msg \in msgs_recv["pen"]:
+        /\ msg.from = "bok" /\ msg.to = "pen" /\ msg.op = "get"
+            /\ msgs_recv' = [msgs_recv EXCEPT !["pen"] = @ \ {msg}]
+            /\ pc' = [pc EXCEPT !["pen"] = "get_pen_fetch_head"]
+    /\ UNCHANGED <<msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Pen_SendFetch ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "send_fetch"
+    /\  LET
+            msg == Message("pen", "bok", "get")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["pen"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["pen"] = "init"]
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, sys_state>>
+Pen_TryFetchHeadCache ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "get_pen_fetch_head"
+    /\ \E head_found_in_l0_cache \in {TRUE, FALSE}:
+            IF head_found_in_l0_cache THEN
+                pc' = [pc EXCEPT !["pen"] = "send_fetch"]
+            ELSE
+                pc' = [pc EXCEPT !["pen"] = "get_search_tree"]
+    /\ UNCHANGED <<msgs_recv ,msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+Pen_TreeSearchHead ==
+    /\ sys_state # "done"
+    /\ pc["pen"] = "get_search_tree"
+    /\ \E head_found_in_tree \in {TRUE, FALSE}:
+            IF head_found_in_tree THEN
+                pc' = [pc EXCEPT !["pen"] = "send_fetch"]
+            ELSE
+                pc' = [pc EXCEPT !["pen"] = "send_fetch"]
+    /\ UNCHANGED <<msgs_recv ,msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+
+Bok_RecvFetch ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "wait_fetch"
+    /\ \E msg \in msgs_recv["bok"]:
+            /\ msg.from = "pen" /\ msg.to = "bok" /\ msg.op = "get"
+            /\ pc' = [pc EXCEPT !["bok"] = "get_recv_head"]
+    /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+
 Bok_RecvHead ==
     /\ sys_state # "done"
     /\ pc["bok"] = "get_recv_head"
@@ -390,10 +449,6 @@ Bok_GetSendUsr ==
             /\ pc' = [pc EXCEPT !["bok"] = "init"]
             /\ sys_state' = "done"
     /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state>>
-\* Bok_FetchHead ==
-\*     /\ sys_state # "done"
-\*     /\ pc["bok"] = "init"
-\*     /\ \E m
 
 Ink_PutValueToJournal ==
     \/ Ink_RecvWriteReqBok
@@ -408,6 +463,13 @@ Pen_Pushmem ==
     \/ Pen_RetryPushLaterBok
     \/ Pen_Push
     \/ Pen_SendPushmemBok
+Pen_FetchHead ==
+    \/ Bok_SendFetch
+    \/ Bok_RecvFetch
+    \/ Pen_TryFetchHeadCache
+    \/ Pen_TreeSearchHead
+    \/ Pen_SendFetch
+    \/ Pen_RecvFetch
 Leveled_Get ==
     \/ Usr_SendGet
     \/ Bok_RecvGetUsr
@@ -417,6 +479,7 @@ Leveled_Get ==
     \/ Bok_HeadObjIsExpired
     \/ Bok_HeadObjIsTomb
     \/ Bok_HeadNotFound
+    \/ Pen_FetchHead
     \/ Bok_GetSendUsr
 Leveled_Put ==
     \/

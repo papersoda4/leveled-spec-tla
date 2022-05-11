@@ -28,10 +28,12 @@ Messages ==
     \cup Message("ink", "bok", "put")
     \cup Message("bok", "pen", "put")
     \cup Message("pen", "bok", "put")
-    \cup Message("bok", "usr", "put")
     \cup Message("usr", "bok", "get")
     \cup Message("bok", "pen", "get")
     \cup Message("pen", "bok", "get")
+    \cup Message("bok", "ink", "get")
+    \cup Message("ink", "bok", "get")
+    \cup Message("bok", "usr", "put")
 
 VARIABLES
     (*control*)
@@ -465,7 +467,7 @@ Ink_RecvFetchValueBok ==
     /\ \E msg \in msgs_recv["ink"]:
         /\ msg.from = "bok" /\ msg.to = "ink" /\ msg.op = "get"
         /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {msg}]
-        /\ pc' = [pc EXCEPT !["ink"] = "get_send_value"]
+        /\ pc' = [pc EXCEPT !["ink"] = "get_value"]
     /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, msgs_send, sys_state>>
 Ink_SendValueBok ==
     /\ sys_state # "done"
@@ -477,6 +479,15 @@ Ink_SendValueBok ==
             /\ msgs_send' = [msgs_send EXCEPT !["ink"] = Append(@, msg)]
             /\ pc' = [pc EXCEPT !["ink"] = "init"]
     /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, sys_state>>
+Ink_GetValueFromManifestIfExists ==
+    /\ sys_state # "done"
+    /\ pc["ink"] = "get_value"
+    /\ \E value_exists_in_manifest \in {TRUE, FALSE}:
+            IF value_exists_in_manifest THEN
+                pc' = [pc EXCEPT !["ink"] = "get_send_value"]
+            ELSE
+                pc' = [pc EXCEPT !["ink"] = "get_send_value"]
+    /\ UNCHANGED <<msgs_usr, msgs_send, msgs_recv, ink_state, bok_state, pen_state, sys_state>>
 Bok_RecvValueInk ==
     /\ sys_state # "done"
     /\ pc["bok"] = "wait_value"
@@ -489,6 +500,7 @@ Bok_RecvValueInk ==
 Ink_GetValueFromJournal ==
     \/ Bok_SendFetchValueInk
     \/ Ink_RecvFetchValueBok
+    \/ Ink_GetValueFromManifestIfExists
     \/ Ink_SendValueBok
     \/ Bok_RecvValueInk
 Ink_PutValueToJournal ==

@@ -524,23 +524,18 @@ Leveled_Get ==
     \/ Pen_FetchHead
     \/ Bok_GetSendUsr
 Leveled_Put ==
-    \/
-        \/ Usr_SendPut
-        \/ Bok_RecvPutUsr
-    \/
-        \/ Bok_SendWriteToJournal
-        \/ Ink_PutValueToJournal
-        \/ Bok_RecvJournalChanges
-    \/
-        \/ Bok_AddToLedgerCache
-    \/
-        \/ Bok_CheckPushMemReady
-        \/ Bok_SendPushMemPen
-        \/ Pen_Pushmem
-        \/ Bok_RecvPushMemOk
-        \/ Bok_CleanCache
-    \/
-        \/ Bok_PutSendUsr
+    \/ Usr_SendPut
+    \/ Bok_RecvPutUsr
+    \/ Bok_SendWriteToJournal
+    \/ Ink_PutValueToJournal
+    \/ Bok_RecvJournalChanges
+    \/ Bok_AddToLedgerCache
+    \/ Bok_CheckPushMemReady
+    \/ Bok_SendPushMemPen
+    \/ Pen_Pushmem
+    \/ Bok_RecvPushMemOk
+    \/ Bok_CleanCache
+    \/ Bok_PutSendUsr
 
 Terminated ==
     /\ sys_state = "done"

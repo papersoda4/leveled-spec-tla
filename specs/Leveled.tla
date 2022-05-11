@@ -416,7 +416,7 @@ Bok_RecvHead ==
                         IF obj_is_exp THEN
                             pc' = [pc EXCEPT !["bok"] = "get_obj_exp"]
                         ELSE
-                            pc' = [pc EXCEPT !["bok"] = "get_found"]
+                            pc' = [pc EXCEPT !["bok"] = "get_send_fetch_value"]
                             \* pc' = [pc EXCEPT !["bok"] = "get_fetch_obj"]
     /\ UNCHANGED <<msgs_recv, msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
 Bok_HeadNotFound ==
@@ -441,8 +441,7 @@ Bok_GetSendUsr ==
         \/ pc["bok"] = "get_not_found"
         \/ pc["bok"] = "get_found"
     /\
-        LET
-            msg == Message("bok", "usr", "get")
+        LET msg == Message("bok", "usr", "get")
         IN
             /\ msgs_recv' = [msgs_recv EXCEPT !["usr"] = @ \cup {msg}]
             /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
@@ -450,6 +449,48 @@ Bok_GetSendUsr ==
             /\ sys_state' = "done"
     /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state>>
 
+Bok_SendFetchValueInk ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "get_send_fetch_value"
+    /\
+        LET msg == Message("bok", "ink", "get")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["bok"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["bok"] = "wait_value"]
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, sys_state>>
+Ink_RecvFetchValueBok ==
+    /\ sys_state # "done"
+    /\ pc["ink"] = "init"
+    /\ \E msg \in msgs_recv["ink"]:
+        /\ msg.from = "bok" /\ msg.to = "ink" /\ msg.op = "get"
+        /\ msgs_recv' = [msgs_recv EXCEPT !["ink"] = @ \ {msg}]
+        /\ pc' = [pc EXCEPT !["ink"] = "get_send_value"]
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, msgs_send, sys_state>>
+Ink_SendValueBok ==
+    /\ sys_state # "done"
+    /\ pc["ink"] = "get_send_value"
+    /\
+        LET msg == Message("ink", "bok", "get")
+        IN
+            /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \cup {msg}]
+            /\ msgs_send' = [msgs_send EXCEPT !["ink"] = Append(@, msg)]
+            /\ pc' = [pc EXCEPT !["ink"] = "init"]
+    /\ UNCHANGED <<msgs_usr, ink_state, bok_state, pen_state, sys_state>>
+Bok_RecvValueInk ==
+    /\ sys_state # "done"
+    /\ pc["bok"] = "wait_value"
+    /\ \E msg \in msgs_recv["bok"]:
+        /\ msg.from = "ink" /\ msg.to = "bok" /\ msg.op = "get"
+        /\ msgs_recv' = [msgs_recv EXCEPT !["bok"] = @ \ {msg}]
+        /\ pc' = [pc EXCEPT !["bok"] = "get_found"]
+    /\ UNCHANGED <<msgs_usr, msgs_send, ink_state, bok_state, pen_state, sys_state>>
+
+Ink_GetValueFromJournal ==
+    \/ Bok_SendFetchValueInk
+    \/ Ink_RecvFetchValueBok
+    \/ Ink_SendValueBok
+    \/ Bok_RecvValueInk
 Ink_PutValueToJournal ==
     \/ Ink_RecvWriteReqBok
     \/ Ink_CheckCanWrite
@@ -479,6 +520,7 @@ Leveled_Get ==
     \/ Bok_HeadObjIsExpired
     \/ Bok_HeadObjIsTomb
     \/ Bok_HeadNotFound
+    \/ Ink_GetValueFromJournal
     \/ Pen_FetchHead
     \/ Bok_GetSendUsr
 Leveled_Put ==

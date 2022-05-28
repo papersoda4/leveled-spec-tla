@@ -20,8 +20,8 @@ vars == <<journal, ledger, pc, ledger_update_status, get_obj_val, write_ack, sqn
 (***************************************************************************)
 UpdateLedger ==
     /\ write_ack = TRUE /\ ledger_update_status = "updating"
-    /\ LET object_loc == sqn IN
-        /\ ledger' = [ledger EXCEPT !["key"] = object_loc]
+    /\ LET object_location == sqn IN
+        /\ ledger' = [ledger EXCEPT !["key"] = object_location]
         /\ ledger_update_status' = "updated"
     /\ UNCHANGED <<pc, journal, get_obj_val, write_ack, sqn>>
 

@@ -11,7 +11,9 @@ VARIABLES
     ledger_update_status, \* status of ledger from perspective of updating ledger to newest state
     get_obj_val, \* objects' contents , received by key in get operation
     write_ack    \* boolean flag, indicating that write had been acknowledged
-
+(***************************************************************************)
+(* Structures                                                              *)
+(***************************************************************************)
 vars == <<journal, ledger, pc, ledger_update_status, get_obj_val, write_ack, sqn>>
 (***************************************************************************)
 (* Actions                                                                 *)
@@ -67,7 +69,7 @@ Next ==
 (* Verification                                                            *)
 (***************************************************************************)
 TypeInv ==
-    /\ pc \in {"active" ,"done"}
+    /\ pc \in {"active", "done"}
     /\ ledger_update_status \in {"before_update", "updating", "updated"}
     /\ get_obj_val \in {"none", "obj_old", "obj_new"}
     /\ write_ack \in BOOLEAN
@@ -85,7 +87,7 @@ EventualConsistency ==
 
 Fairness ==
     /\ EventualConsistency
-    /\ WF_<<vars>>(Terminate)
+    /\ WF_vars(Terminate)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 ====

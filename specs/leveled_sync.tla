@@ -10,12 +10,7 @@ Range(seq) == {seq[x] : x \in DOMAIN seq}
 (***************************************************************************)
 VARIABLES
     system_state, \* current status of the execution of the system
-    (*
-        map of Leveled actors to their current statuses
-        actor_state["bok"] = "init"
-        actor_state["ink"] = "send_msg"
-    *)
-    actor_state
+    actor_state   \* map of Leveled actors to their current statuses
 (***************************************************************************)
 (* Messages                                                                *)
 (***************************************************************************)

@@ -75,15 +75,15 @@ TypeInv ==
     /\ write_ack \in BOOLEAN
     /\ sqn \in Nat \ {0}
 
-GetMayReturnStaleDataAfterWriteAck ==
+GetMayReturnOldValAfterWriteAckOfNewVal ==
     <>(write_ack = TRUE /\ get_obj_val = "obj_old")
 
-GetWillReturnNewestDataAfterLedgerUpdated ==
+GetWillReturnNewestObjAfterObjMetadataUpdated ==
     ledger_update_status = "updated" ~> get_obj_val = "obj_new"
 
 EventualConsistency ==
-    /\ GetMayReturnStaleDataAfterWriteAck
-    /\ GetWillReturnNewestDataAfterLedgerUpdated
+    /\ GetMayReturnOldValAfterWriteAckOfNewVal
+    /\ GetWillReturnNewestObjAfterObjMetadataUpdated
 
 Fairness ==
     /\ EventualConsistency

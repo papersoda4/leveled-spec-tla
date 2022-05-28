@@ -2,7 +2,7 @@
 
 root_dir="./specs"
 declare -a test_files=(
-    # "MC_Leveled"
+    "leveled_sync"
 )
 
 function run_test_file() {

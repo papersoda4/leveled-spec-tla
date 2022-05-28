@@ -1,7 +1,7 @@
 ---- MODULE leveled_sync ----
 EXTENDS TLC, Naturals, FiniteSets, Sequences
 (***************************************************************************)
-(* Convertes a sequence to a set                                            *)
+(* Converts a sequence to a set                                            *)
 (* Range(<<"a", "b", "b">>) = {"a", "b"}                                   *)
 (***************************************************************************)
 Range(seq) == {seq[x] : x \in DOMAIN seq}
@@ -40,7 +40,6 @@ BOOKIE_STATES == {"init", "recv_get_usr" ,"done"}
 INKER_STATES == {"init"}
 PENCILLER_STATES == {"init"}
 OPERATION_TYPES == {"get", "put"}
-
 MESSAGES == {
     Message("usr", "bok", "get", Nil),
     Message("bok", "usr", "get", AnyVal)

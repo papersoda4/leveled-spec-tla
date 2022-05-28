@@ -3,6 +3,7 @@
 root_dir="./specs"
 declare -a test_files=(
     "leveled_sync"
+    "leveled_eventual"
 )
 
 function run_test_file() {

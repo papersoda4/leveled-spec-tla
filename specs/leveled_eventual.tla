@@ -5,12 +5,12 @@ EXTENDS TLC, FiniteSets, Naturals, Sequences
 (***************************************************************************)
 VARIABLES
     pc,      \* state of the system
-    journal, \* sequential structure in Leveled for storing objects
+    journal, \* sequential structure in Leveled for storing contents of objects
     sqn,     \* reference to the newest added object in Journal (object metadata)
-    ledger,  \* structure for storing metadata for objects
+    ledger,  \* structure in Leveled for storing metadata for objects
     ledger_update_status, \* status of ledger from perspective of updating ledger to newest state
-    get_obj_val, \* contents , received by get operation
-    write_ack    \* flag, indicating that write had been acknowledged
+    get_obj_val, \* objects' contents , received by key in get operation
+    write_ack    \* boolean flag, indicating that write had been acknowledged
 
 vars == <<journal, ledger, pc, ledger_update_status, get_obj_val, write_ack, sqn>>
 (***************************************************************************)

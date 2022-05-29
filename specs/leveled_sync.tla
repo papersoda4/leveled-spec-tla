@@ -97,16 +97,15 @@ TypeInv ==
     /\ msgs_sent \in [SYSTEM_ACTORS -> SUBSET MESSAGES]
     /\ msgs_recv \in [SYSTEM_ACTORS -> SUBSET MESSAGES]
 
-Responsive == []<>(\A actor \in SYSTEM_ACTORS: Cardinality(msgs_recv[actor]) = 0)
-
-Synchronous == []<>(
+Synchronous == <>[](
+    system_state = "done" /\
+    \A actor \in SYSTEM_ACTORS: Cardinality(msgs_recv[actor]) = 0 /\
     \A a1, a2 \in SYSTEM_ACTORS:
         \E m1 \in msgs_sent[a1]:
             \E m2 \in msgs_sent[a2]:
                 m1.from = m2.to /\ m1.to = m2.from /\ m1.op = m2.op)
 
 Fairness ==
-    /\ Responsive
     /\ Synchronous
     /\ WF_<<system_state>>(Termination)
 
